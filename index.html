@@ -1719,6 +1719,7 @@ function renderSidebar(){
 
 /* ---------- NAVIGASI ---------- */
 function openPage(id){
+  if(!canOpenPage(id)){const [t,m]=blockedPageMessage(id);toast(t,m,"warn",3500);return;}
   curPage=id;
   syncLabChrome();
   if(id==="lkpd") setTimeout(buildLKPDPage,0);
@@ -1732,11 +1733,33 @@ function openPage(id){
   renderStageNavs();
   renderSidebar();
 }
+function canOpenPage(id){
+  if(id==="lkpd") return !!S.reg;
+  if(id==="rapor") return !!S.reg && !!S.missions.ref.done;
+  if(id==="labhome"||id==="st-h") return !!S.reg;
+  if(id==="teori") return !!S.reg && !!S.missions.h.done;
+  if(id.startsWith("st-")){
+    const key=id.slice(3), idx=stageIdx(key);
+    if(idx<0) return false;
+    if(idx===0) return !!S.reg;
+    return !!S.missions[STAGES[idx-1].id].done;
+  }
+  return true;
+}
+function blockedPageMessage(id){
+  if(id==="rapor") return ["RAPOR TERKUNCI","Selesaikan seluruh perjalanan hingga Refleksi terlebih dahulu."];
+  if(id==="teori") return ["TEORI TERKUNCI","Selesaikan dan kunci Hipotesis terlebih dahulu."];
+  if(id.startsWith("st-")){
+    const idx=stageIdx(id.slice(3));
+    if(idx>0){const prev=STAGES[idx-1];return ["TAHAP TERKUNCI",`Selesaikan ${prev.label} — ${prev.name} terlebih dahulu.`];}
+  }
+  return ["MENU TERKUNCI","Selesaikan tahap sebelumnya sesuai alur pembelajaran."];
+}
 function goStage(idx){
   if(idx<0||idx>=STAGES.length)return;
-  /* Semua misi boleh dilanjutkan meskipun percobaan sebelumnya gagal.
-     Status gagal dicatat untuk evaluasi akhir di Rapor Belajar. */
-  openPage("st-"+STAGES[idx].id);
+  const id="st-"+STAGES[idx].id;
+  if(!canOpenPage(id)){const [t,m]=blockedPageMessage(id);toast(t,m,"warn",3500);return;}
+  openPage(id);
 }
 function recordLearningGap(g){
   if(!g||!g.stage)return;
@@ -1849,7 +1872,7 @@ function renderLabHome(){
   $("#labHomeMenus").innerHTML=menus.map(m=>{
     const mm=m.type==="stage"?S.missions[STAGES[m.idx].id]:null;
     const done=!!mm?.done, failed=!!mm?.failed;
-    const locked=m.type==="report"&&!S.missions.ref.done;
+    const locked=m.type==="report"&&!S.missions.ref.done || (m.type==="theory"&&!S.missions.h.done) || (m.type==="stage"&&!canOpenPage(m.id));
     let status=mm?(done?(failed?"PERNAH GAGAL":"SELESAI"):"BELUM DIMULAI"):locked?"TERKUNCI":"TERSEDIA";
     const score=mm&&done?`<span class="road-score">${m.id==="st-m6"?`${mm.score}/400`:`${mm.score}/100`}</span>`:"";
     const cls=["road-card",m.type,done?"done":"",failed?"failed":""].join(" ");
@@ -1869,7 +1892,7 @@ function renderStageNavs(){
       return;
     }
     if(key==="lkpd"){
-      nav.innerHTML=`<button class="btn btn-ghost btn-sm" onclick="openPage('ref')">← REFLEKSI</button><span class="sp">LKPD Digital berisi dokumentasi data dan aktivitas. Lanjutkan ke Rapor setelah meninjau hasil.</span><button class="btn btn-primary btn-sm" onclick="openPage('rapor')">📊 RAPOR BELAJAR →</button>`;
+      nav.innerHTML=`<button class="btn btn-ghost btn-sm" onclick="openPage('labhome')">← BERANDA LAB</button><span class="sp">LKPD Digital dapat dibuka kapan saja selama perjalanan belajar.</span>${S.missions.ref.done?`<button class="btn btn-primary btn-sm" onclick="openPage('rapor')">📊 RAPOR BELAJAR →</button>`:""}`;
       return;
     }
     if(key==="teori"){
@@ -1911,9 +1934,7 @@ function renderMenu(){
   if(S.reg){
     const next=STAGES[ri];
     st.innerHTML=`<span style="font-size:22px">🧑‍🔬</span>
-      <div style="flex:1;min-width:200px"><b>${esc(S.regData.nama)}</b> · ${esc(S.regData.kelas)}${S.regData.kelompok?" · "+esc(S.regData.kelompok):""}<br>
-      <span class="hint">Ketuntasan: ${doneN}/11 tahap · Nilai sementara: <b class="num">${nilai}/100</b> · ${S.xp} XP · ${levelName()}</span></div>
-      <button class="btn btn-hot btn-sm" onclick="${doneN>=STAGES.length?"openPage('rapor')":`goStage(${ri})`}">${doneN===0?"🏠 BUKA BERANDA LAB →":doneN>=STAGES.length?"📊 LIHAT RAPOR BELAJAR →":`🏠 BERANDA LAB →`}</button>`;
+      <div style="flex:1;min-width:200px"><b>${esc(S.regData.nama)}</b> · ${esc(S.regData.kelas)}${S.regData.kelompok?" · "+esc(S.regData.kelompok):""}</div>`;
     $("#mcMulaiGo").textContent="LANJUTKAN PERJALANAN →";
   }else{
     st.innerHTML=`<span style="font-size:22px">🧪</span>
